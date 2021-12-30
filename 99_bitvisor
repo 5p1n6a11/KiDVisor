@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+datarootdir="/usr/share"
+
+. "${datarootdir}/grub/grub-mkconfig_lib"
+
+if [ \! -f /boot/bitvisor.elf ]; then
+	exit 0
+fi  
+echo "Found BitVisor image" >&2
+
+cat << EOF
+if [ "\${bitvisor_next_entry}" ]; then
+	set default="\${bitvisor_next_entry}"
+	set bitvisor_next_entry=
+	save_env bitvisor_next_entry
+else
+	set bitvisor_next_entry="\${default}"
+	save_env bitvisor_next_entry
+	set default="BitVisor"
+fi  
+
+menuentry "BitVisor" {
+$(prepare_grub_to_access_device ${GRUB_DEVICE_BOOT} | grub_add_tab)
+	echo 'Loading BitVisor ...'
+	multiboot /boot/bitvisor.elf
+}   
+EOF
