@@ -9,17 +9,17 @@
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Detect module install");
 
-static struct kprobe kp = {
-    .symbol_name = "kallsyms_lookup_name"
-};
-
-typedef unsigned long (*_kallsyms_lookup_name_t)(const char *);
-static _kallsyms_lookup_name_t _kallsyms_lookup_name = NULL;
+static unsigned long (*_kallsyms_lookup_name)(const char *) = NULL;
 
 static sys_call_ptr_t *_sys_call_table = NULL;
 
-static sys_call_ptr_t orig_init_module;
-static sys_call_ptr_t orig_finit_module;
+static sys_call_ptr_t orig_init_module = NULL;
+static sys_call_ptr_t orig_finit_module = NULL;
+
+static struct module *(*_find_module)(const char *) = NULL;
+
+static char *target = "hello";
+module_param(target, charp, S_IRUGO);
 
 static void
 save_original_syscall(void)
@@ -55,13 +55,42 @@ replace_system_call(void *new_init_module, void *new_finit_module)
     change_page_attr_to_ro(pte);
 }
 
+static DEFINE_MUTEX(module_mutex);
+
+static struct module*
+get_module(const char *modname)
+{
+    struct module *mod = NULL;
+
+    if (mutex_lock_interruptible(&module_mutex) != 0) {
+        goto mutex_fail;
+    }
+    
+    _find_module = (void *)_kallsyms_lookup_name("find_module");
+    // pr_info("find_module address is 0x%px\n", _find_module);
+
+    mod = _find_module(modname);
+
+    mutex_unlock(&module_mutex);
+
+mutex_fail:
+    pr_info("get_module(%s) = %p\n", modname, mod);
+
+    return mod;
+}
+
 static asmlinkage long
 my_init_module(const struct pt_regs *regs)
 {
     long orig;
+    struct module *mod = NULL;
 
     pr_info("call my_init_module\n");
     orig = orig_init_module(regs);
+
+    mod = get_module(target);
+    if (mod)
+        pr_info("module's name is %s\n", mod->name);
 
     return orig;
 }
@@ -70,16 +99,25 @@ static asmlinkage long
 my_finit_module(const struct pt_regs *regs)
 {
     long orig;
+    struct module *mod = NULL;
 
     pr_info("call my_finit_module\n");
     orig = orig_finit_module(regs);
 
+    mod = get_module(target);
+    if (mod)
+        pr_info("module's name is %s\n", mod->name);
+        
     return orig;
 }
 
 static int __init
 modhook_init(void)
 {
+    static struct kprobe kp = {
+        .symbol_name = "kallsyms_lookup_name"
+    };
+
     register_kprobe(&kp);
     _kallsyms_lookup_name = (void *)kp.addr;
     pr_info("kallsyms_lookup_name's address is 0x%px", _kallsyms_lookup_name);
