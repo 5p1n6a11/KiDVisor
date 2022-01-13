@@ -75,39 +75,50 @@ get_module(const char *modname)
 
 mutex_fail:
     pr_info("get_module(%s) = %p\n", modname, mod);
-
+    
     return mod;
 }
 
+static void
+vmcall_modhook(void *base, unsigned long size)
+{
+    pr_info("base = %px\n", base);
+    pr_info("size = %ld\n", size);
+}
+
 static asmlinkage long
-my_init_module(const struct pt_regs *regs)
+hook_init_module(const struct pt_regs *regs)
 {
     long orig;
     struct module *mod = NULL;
 
-    pr_info("call my_init_module\n");
+    pr_info("call hook_init_module\n");
     orig = orig_init_module(regs);
 
     mod = get_module(target);
-    if (mod)
+    if (mod) {
         pr_info("module's name is %s\n", mod->name);
+        vmcall_modhook(mod->core_layout.base, mod->core_layout.ro_size);
+    }
 
     return orig;
 }
 
 static asmlinkage long
-my_finit_module(const struct pt_regs *regs)
+hook_finit_module(const struct pt_regs *regs)
 {
     long orig;
     struct module *mod = NULL;
 
-    pr_info("call my_finit_module\n");
+    pr_info("call hook_finit_module\n");
     orig = orig_finit_module(regs);
 
     mod = get_module(target);
-    if (mod)
+    if (mod) {
         pr_info("module's name is %s\n", mod->name);
-        
+        vmcall_modhook(mod->core_layout.base, mod->core_layout.ro_size);
+    }
+
     return orig;
 }
 
@@ -130,7 +141,7 @@ modhook_init(void)
     pr_info("original __x64_sys_init_module's address is %px\n", orig_init_module);
     pr_info("original __x64_sys_finit_module's address is %px\n", orig_finit_module);
 
-    replace_system_call(my_init_module, my_finit_module);
+    replace_system_call(hook_init_module, hook_finit_module);
     pr_info("system call replaced\n");
     
     return 0;
