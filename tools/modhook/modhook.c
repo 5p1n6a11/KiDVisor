@@ -6,8 +6,17 @@
 #include <linux/kallsyms.h>
 #include <asm/pgtable.h>
 
+#include "modhook.h"
+
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Detect module install");
+
+#define VMMCALL_TYPE_ERROR          0
+#define VMMCALL_TYPE_VMCALL         1
+#define VMMCALL_TYPE_VMMCALL        2
+
+/* "get_vmmcall_number" vmmcall number is 0. */
+#define GET_VMMCALL_NUMBER          0
 
 static unsigned long (*_kallsyms_lookup_name)(const char *) = NULL;
 
@@ -80,10 +89,78 @@ mutex_fail:
 }
 
 static void
+call_vmm_call_function(call_vmm_function_t *function,
+                        call_vmm_arg_t *arg, call_vmm_ret_t *ret)
+{
+    struct call_vmm_call_function_sub_data data;
+    data.function = function;
+    data.arg = arg;
+    data.ret = ret;
+    pr_info("vmcall %d(arg=0x%lx, 0x%lx)\n",data.function->vmmcall_number, data.arg->rbx, data.arg->rcx);
+    switch (data.function->vmmcall_type) {
+    case VMMCALL_TYPE_VMCALL:
+        asm volatile("vmcall"
+                        : "=a" (data.ret->rax), "=b" (data.ret->rbx),
+                            "=c" (data.ret->rcx), "=d" (data.ret->rdx),
+                            "=S" (data.ret->rsi), "=D" (data.ret->rdi)
+                        : "a" (data.function->vmmcall_number),
+                            "b" (data.arg->rbx),
+                            "c" (data.arg->rcx), "d" (data.arg->rdx),
+                            "S" (data.arg->rsi), "D" (data.arg->rdi)
+                        : "memory");
+        break;
+    case VMMCALL_TYPE_VMMCALL:
+        asm volatile("vmmcall"
+                        : "=a" (data.ret->rax), "=b" (data.ret->rbx),
+                            "=c" (data.ret->rcx), "=d" (data.ret->rdx),
+                            "=S" (data.ret->rsi), "=D" (data.ret->rdi)
+                        : "a" (data.function->vmmcall_number),
+                            "b" (data.arg->rbx),
+                            "c" (data.arg->rcx), "d" (data.arg->rdx),
+                            "S" (data.arg->rsi), "D" (data.arg->rdi)
+                        : "memory");
+        break;
+    default:
+        break;
+    }
+}
+
+/* Get an entry number of specified vmmcall */
+void vmmcall_get_function(const char *vmmcall, call_vmm_function_t *res)
+{
+    call_vmm_function_t gf;
+    call_vmm_arg_t gf_a;
+    call_vmm_ret_t gf_r;
+
+    gf.vmmcall_number = GET_VMMCALL_NUMBER;
+    gf.vmmcall_type = VMMCALL_TYPE_VMCALL;
+
+    gf_a.rbx = (intptr_t)vmmcall;
+    pr_info("vmmcall_string: %p, 0x%lx, %s\n", vmmcall, gf_a.rbx, vmmcall);
+    call_vmm_call_function(&gf, &gf_a, &gf_r);
+
+    /* RAX = vmmcall number */
+    res->vmmcall_number = (int)gf_r.rax;
+    res->vmmcall_type = VMMCALL_TYPE_VMCALL; // XXX: Should get this value too.
+}
+
+static void
 vmcall_modhook(void *base, unsigned long size)
 {
+    call_vmm_function_t modf;
+    call_vmm_arg_t mod_a;
+    call_vmm_ret_t mod_r;
+    const char modhook[] = "modhook";
+
     pr_info("base = %px\n", base);
     pr_info("size = %ld\n", size);
+
+    vmmcall_get_function(modhook, &modf);
+    pr_info("modhook number = %d\n", modf.vmmcall_number);
+
+    mod_a.rbx = (intptr_t)base;
+    mod_a.rcx = size;
+    call_vmm_call_function(&modf, &mod_a, &mod_r);
 }
 
 static asmlinkage long
