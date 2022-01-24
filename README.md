@@ -1,7 +1,5 @@
 # iVisor
 
-BitVisor is a tiny hypervisor initially designed for mediating I/O access from a single guest OS. Its implementation is mature enough to run Windows and Linux, and can be used as a generic platform for various research and development projects.
-
 ## Environment
 
 Ubuntu 21.10 on VMware Workstation 16 Player
@@ -51,6 +49,8 @@ make
 
 ## References
 
-bitvisor
+### bitvisor
+
+BitVisor is a tiny hypervisor initially designed for mediating I/O access from a single guest OS. Its implementation is mature enough to run Windows and Linux, and can be used as a generic platform for various research and development projects.
 
 https://github.com/matsu/bitvisor
