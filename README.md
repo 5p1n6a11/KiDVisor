@@ -49,8 +49,10 @@ $ ./dbgsh
 
 ## References
 
-### bitvisor
+### BitVisor[^BitVisor]
 
 BitVisor is a tiny hypervisor initially designed for mediating I/O access from a single guest OS. Its implementation is mature enough to run Windows and Linux, and can be used as a generic platform for various research and development projects.
 
 https://github.com/matsu/bitvisor
+
+[^BitVisor]: Takahiro Shinagawa, Hideki Eiraku, Kouichi Tanimoto, Kazumasa Omote, Shoichi Hasegawa, Takashi Horie, Manabu Hirano, Kenichi Kourai, Yoshihiro Oyama, Eiji Kawai, Kenji Kono, Shigeru Chiba, Yasushi Shinjo, and Kazuhiko Kato. 2009. BitVisor: a thin hypervisor for enforcing i/o device security. In Proceedings of the 2009 ACM SIGPLAN/SIGOPS international conference on Virtual execution environments (VEE '09). Association for Computing Machinery, New York, NY, USA, 121–130. https://doi.org/10.1145/1508293.1508311
